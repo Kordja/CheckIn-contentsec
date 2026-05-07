@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课堂考勤系统 — 数据查询</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<nav>
+    <span class="logo">课堂考勤</span>
+    <a href="index.html">考勤签到</a>
+    <a href="group.html">合照识别</a>
+    <a href="data.html" class="active">数据查询</a>
+</nav>
+
+<a class="btn-fixed-register" href="#" onclick="openRegisterModal();return false;">注册人脸</a>
+
+<main class="container">
+    <!-- 查询面板 -->
+    <div class="card">
+        <h2>查询条件</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label>日期（留空查全部）</label>
+                <input type="date" id="filterDate">
+            </div>
+            <div class="form-group">
+                <label>学号（留空查全部）</label>
+                <input type="text" id="filterStudentId" placeholder="如: 20240001">
+            </div>
+        </div>
+        <div style="display:flex; gap:12px;">
+            <button class="btn btn-primary" onclick="queryAll()">查询</button>
+            <button class="btn btn-outline" onclick="exportData('excel')">导出 Excel</button>
+            <button class="btn btn-outline" onclick="exportData('csv')">导出 CSV</button>
+        </div>
+    </div>
+
+    <!-- 统计概览 -->
+    <div class="card">
+        <h2>数据概览</h2>
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-value" id="statAttendance">-</div>
+                <div class="stat-label">考勤记录</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statEmotion">-</div>
+                <div class="stat-label">情绪记录</div>
+            </div>
+            <div class="stat-card stat-card-clickable" onclick="openStudentListModal()" title="点击查看已注册学生">
+                <div class="stat-value" id="statStudents">-</div>
+                <div class="stat-label">注册学生 ▸</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表 + 考勤表格 -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;" class="resp-grid">
+        <div class="card">
+            <h2>情绪分布</h2>
+            <div class="chart-wrap">
+                <canvas id="emotionChart"></canvas>
+            </div>
+            <div id="emotionEmpty" style="display:none; text-align:center; padding:24px; color:var(--text-muted);">
+                暂无情绪数据
+            </div>
+        </div>
+        <div class="card">
+            <h2>考勤记录</h2>
+            <div style="max-height:350px; overflow-y:auto;">
+                <table>
+                    <thead><tr>
+                        <th>学号</th><th>姓名</th><th>时间</th><th>状态</th><th>情绪</th>
+                    </tr></thead>
+                    <tbody id="attendanceBody">
+                        <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">点击"查询"加载数据</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- 注册弹窗 -->
+<div class="modal-overlay" id="registerModal" onclick="closeModalOutside(event)">
+    <div class="modal modal-wide" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>人脸注册</h3>
+            <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" id="regName" placeholder="如：张三">
+                </div>
+                <div class="form-group">
+                    <label>学号</label>
+                    <input type="text" id="regStudentId" placeholder="如：20240001">
+                </div>
+            </div>
+            <div class="camera-container" style="margin-bottom:12px;">
+                <video id="regVideo" autoplay playsinline></video>
+                <div class="camera-overlay overlay-scanning">请面对摄像头</div>
+            </div>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <button class="btn btn-primary" id="btnRegister" onclick="registerFace()">拍照注册</button>
+                <span style="font-size:13px; color:var(--text-muted);">或</span>
+                <label class="btn btn-outline" style="cursor:pointer;">
+                    上传照片注册
+                    <input type="file" id="regFileInput" accept="image/*" style="display:none;" onchange="registerFromFile(this.files[0])">
+                </label>
+            </div>
+            <div id="regResult" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 学生列表弹窗 -->
+<div class="modal-overlay" id="studentListModal" onclick="closeStudentListModalOutside(event)">
+    <div class="modal modal-wide" style="width:560px;" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h3>已注册学生</h3>
+            <button class="modal-close" onclick="closeStudentListModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="studentListBody">
+            <p style="color:var(--text-muted);">加载中...</p>
+        </div>
+    </div>
+</div>
+
+<script src="js/register-modal.js"></script>
+<script src="js/data.js"></script>
+</body>
+</html>
