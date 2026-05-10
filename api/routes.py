@@ -283,15 +283,6 @@ def register():
     if not student_id:
         return jsonify({"code": 1, "msg": "学号不能为空", "data": None}), 400
 
-    # 检查是否已注册（在读取图片前，节省资源）
-    existing = get_student(student_id)
-    if existing:
-        return jsonify({
-            "code": 6,
-            "msg": f"学号 {student_id} 已注册（{existing['name']}），请勿重复注册",
-            "data": None
-        }), 400
-
     img = _read_image_from_request()
     if img is None:
         return jsonify({"code": 1, "msg": "无效图片", "data": None}), 400
@@ -300,7 +291,6 @@ def register():
     if not faces:
         return jsonify({"code": 2, "msg": "未检测到人脸", "data": None}), 400
 
-    # 取最大人脸注册
     largest = max(faces, key=lambda b: b[2] * b[3])
     x, y, w, h = largest
     face_img = img[y:y + h, x:x + w]
@@ -309,10 +299,20 @@ def register():
     if not ok:
         return jsonify({"code": 3, "msg": "人脸编码失败", "data": None}), 400
 
-    # 先写数据库，再持久化编码
+    existing = get_student(student_id)
+    if existing:
+        from db.database import update_student_name
+        if name and name != existing.get("name"):
+            update_student_name(student_id, name)
+        save_encodings()
+        return jsonify({
+            "code": 0,
+            "msg": f"补录成功（为 {existing['name']} 追加入脸编码）",
+            "data": {"student_id": student_id, "name": name or existing["name"]}
+        })
+
     if name:
-        if not add_student(name, student_id):
-            return jsonify({"code": 6, "msg": f"学号 {student_id} 已存在", "data": None}), 400
+        add_student(name, student_id)
 
     save_encodings()
 
