@@ -2,9 +2,7 @@
 
 const API_BASE = '/api';
 let videoEl = null;
-let autoMode = false;
 let stream = null;
-let autoFrameBuffer = [];
 
 // ---- 摄像头 ----
 
@@ -15,12 +13,10 @@ async function initCamera() {
             video: { width: 640, height: 480, facingMode: 'user' }
         });
         videoEl.srcObject = stream;
-        // 等视频元数据就绪
         await new Promise(r => videoEl.onloadedmetadata = r);
         document.getElementById('cameraStatus').textContent =
             `摄像头已就绪 (${videoEl.videoWidth}×${videoEl.videoHeight})`;
         updateOverlay('点击拍照签到', 'scanning');
-        startAutoCheck();
     } catch (e) {
         document.getElementById('cameraStatus').textContent = '摄像头不可用: ' + e.message;
         updateOverlay('摄像头不可用', 'error');
@@ -44,9 +40,8 @@ async function manualCapture() {
     const btn = document.getElementById('btnCapture');
     btn.disabled = true;
     btn.textContent = '采集中...';
-    updateOverlay('采集中...', 'scanning');
+    updateOverlay('采集中，请连续眨眼...', 'scanning');
 
-    // 采集多帧（用于活体检测，即使部分帧失败也不影响签到）
     const frames = [];
     for (let i = 0; i < 8; i++) {
         try {
@@ -54,7 +49,7 @@ async function manualCapture() {
             if (blob && blob.size > 1000) {
                 frames.push(blob);
             }
-        } catch (e) { /* 跳过失败帧 */ }
+        } catch (e) { /* skip */ }
         await sleep(120);
     }
 
@@ -69,7 +64,6 @@ async function manualCapture() {
         return;
     }
 
-    // 发送
     const formData = new FormData();
     frames.forEach((blob, i) => {
         formData.append('frames', blob, `f${i}.jpg`);
@@ -125,58 +119,6 @@ function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
 
-// ---- 自动签到 ----
-
-function toggleAutoMode() {
-    autoMode = document.getElementById('autoMode').checked;
-    document.getElementById('autoLabel').textContent = '自动签到：' + (autoMode ? '开' : '关');
-    autoFrameBuffer = [];
-    if (autoMode) {
-        updateOverlay('自动检测中，请自然眨眼...', 'scanning');
-    } else {
-        updateOverlay('点击拍照签到', 'scanning');
-    }
-}
-
-function startAutoCheck() {
-    setInterval(async () => {
-        if (!autoMode || !videoEl || !videoEl.srcObject) {
-            autoFrameBuffer = [];
-            return;
-        }
-
-        try {
-            const blob = await captureFrameBlob();
-            autoFrameBuffer.push(blob);
-            if (autoFrameBuffer.length > 12) autoFrameBuffer.shift();
-
-            if (autoFrameBuffer.length >= 8) {
-                const formData = new FormData();
-                autoFrameBuffer.forEach((b, i) => {
-                    formData.append('frames', b, `a${i}.jpg`);
-                });
-
-                const resp = await fetch(API_BASE + '/attendance', {
-                    method: 'POST', body: formData
-                });
-                const result = await resp.json();
-
-                if (result.code === 0) {
-                    showResult(result);
-                    updateOverlay('签到成功', 'success');
-                    autoMode = false;
-                    document.getElementById('autoMode').checked = false;
-                    document.getElementById('autoLabel').textContent = '自动签到：关';
-                    autoFrameBuffer = [];
-                    setTimeout(() => updateOverlay('点击拍照签到', 'scanning'), 3000);
-                }
-            }
-        } catch (e) {
-            // 忽略单次失败，继续采集
-        }
-    }, 400);
-}
-
 // ---- 结果展示 ----
 
 function showResult(result) {
@@ -190,7 +132,14 @@ function showResult(result) {
         if (result.data.student_id) detail += '<p>学号: ' + result.data.student_id + '</p>';
         if (result.data.emotion) detail += '<p>情绪: ' + result.data.emotion + '</p>';
         if (result.data.liveness !== undefined) {
-            detail += '<p>活体: ' + (result.data.liveness ? '通过' : '未通过（已记录）') + '</p>';
+            let livenessText = result.data.liveness;
+            if (result.data.liveness === 'passed') livenessText = '通过';
+            else if (result.data.liveness === 'failed') livenessText = '未通过';
+            else if (result.data.liveness === 'suspicious_screen') livenessText = '通过（⚠ 疑似屏幕翻拍）';
+            detail += '<p>活体: ' + livenessText + '</p>';
+        }
+        if (result.data.screen_score !== undefined) {
+            detail += '<p style="font-size:12px;color:var(--text-muted);">屏幕检测: score=' + result.data.screen_score.toFixed(2) + ', moire=' + result.data.screen_moire_pr.toFixed(2) + ', blur=' + result.data.screen_lap_var.toFixed(0) + '</p>';
         }
     }
 

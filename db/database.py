@@ -130,11 +130,7 @@ def query_attendance(date: str = None, student_id: str = None) -> list[dict]:
     student_id 为空则查所有学生。
     """
     sql = """
-        SELECT a.id, a.student_id, s.name, a.time, a.status, a.liveness,
-               (SELECT e.emotion FROM emotion e
-                WHERE e.student_id = a.student_id
-                ORDER BY abs(strftime('%s', e.time) - strftime('%s', a.time)) ASC
-                LIMIT 1) as emotion
+        SELECT a.id, a.student_id, s.name, a.time, a.status, a.liveness
         FROM attendance a
         LEFT JOIN student s ON a.student_id = s.student_id
         WHERE 1=1
@@ -150,7 +146,21 @@ def query_attendance(date: str = None, student_id: str = None) -> list[dict]:
 
     with _get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
-    return [dict(r) for r in rows]
+
+    # Python 端关联最近的 emotion 记录
+    records = []
+    for r in rows:
+        rec = dict(r)
+        emo_row = conn.execute("""
+            SELECT emotion FROM emotion
+            WHERE student_id = ?
+            ORDER BY abs(julianday(time) - julianday(?)) ASC
+            LIMIT 1
+        """, (rec["student_id"], rec["time"])).fetchone()
+        rec["emotion"] = emo_row["emotion"] if emo_row else None
+        records.append(rec)
+
+    return records
 
 
 # ---- 情绪记录 ----
@@ -189,8 +199,8 @@ def query_emotion(date: str = None, student_id: str = None) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_emotion_stats(date: str = None) -> list[dict]:
-    """按情绪类型统计数量。"""
+def get_emotion_stats(date: str = None, student_id: str = None) -> list[dict]:
+    """按情绪类型统计数量，支持日期和学号筛选。"""
     sql = """
         SELECT emotion, COUNT(*) as count
         FROM emotion
@@ -200,6 +210,9 @@ def get_emotion_stats(date: str = None) -> list[dict]:
     if date:
         sql += " AND date(time) = ?"
         params.append(date)
+    if student_id:
+        sql += " AND student_id = ?"
+        params.append(student_id)
     sql += " GROUP BY emotion ORDER BY count DESC"
 
     with _get_conn() as conn:

@@ -27,7 +27,7 @@ def get_attendance(date: str = None, student_id: str = None) -> dict:
 def get_emotion(date: str = None, student_id: str = None) -> dict:
     """查询情绪记录 + 统计。"""
     rows = query_emotion(date=date, student_id=student_id)
-    stats = get_emotion_stats(date=date)
+    stats = get_emotion_stats(date=date, student_id=student_id)
     return {
         "code": 0,
         "msg": "ok",
