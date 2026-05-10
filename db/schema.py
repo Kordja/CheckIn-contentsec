@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     student_id  TEXT    NOT NULL,
     time        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     status      TEXT    DEFAULT 'present',   -- present / late / leave
-    liveness    INTEGER DEFAULT 0,           -- 0:未验证 1:通过
+    liveness    INTEGER DEFAULT 0,           -- 0:failed 1:passed 2:suspicious_screen
     FOREIGN KEY (student_id) REFERENCES student(student_id)
 );
 """

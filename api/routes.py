@@ -18,7 +18,7 @@ from service.query import (
 )
 from cv_core.recognizer import register_face, save_encodings, load_encodings
 from cv_core.face_detection import detect_faces
-from db.database import add_student, delete_student, get_student
+from db.database import add_student, delete_student, get_student, query_activity as db_query_activity
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -85,13 +85,15 @@ def attendance():
 def group():
     """
     POST /api/group
-    multipart/form-data: image=<file>
+    multipart/form-data: image=<file>, activity_name=<str>（可选，默认当天日期）
     """
     img = _read_image_from_request()
     if img is None:
         return jsonify({"code": 1, "msg": "无效图片或文件类型不支持", "data": None}), 400
 
-    result = process_group(img)
+    activity_name = request.form.get("activity_name", "").strip()
+
+    result = process_group(img, activity_name)
     status_code = 200 if result["code"] == 0 else 400
     return jsonify(result), status_code
 
@@ -123,11 +125,106 @@ def query_emotion():
 @api.route("/activity", methods=["GET"])
 def query_activity():
     """
-    GET /api/activity?activity_id=xxx
+    GET /api/activity?date_start=YYYY-MM-DD&date_end=YYYY-MM-DD&name=xxx
     """
+    date = request.args.get("date")
+    date_start = request.args.get("date_start")
+    date_end = request.args.get("date_end")
+    name = request.args.get("name")
     activity_id = request.args.get("activity_id", type=int)
-    result = get_activity(activity_id=activity_id)
+    result = get_activity(activity_id=activity_id, date=date, name=name,
+                          date_start=date_start, date_end=date_end)
     return jsonify(result)
+
+
+@api.route("/activity/freq-stats", methods=["POST"])
+def activity_freq_stats():
+    """
+    POST /api/activity/freq-stats
+    JSON body: {"activity_ids": []}  — 空数组=全部活动
+    """
+    data = request.get_json(silent=True) or {}
+    activity_ids = data.get("activity_ids", [])
+    from db.database import get_activity_freq_stats
+    stats = get_activity_freq_stats(activity_ids if activity_ids else None)
+    return jsonify({"code": 0, "msg": "ok", "data": {"stats": stats}})
+
+
+@api.route("/activity/merged-export", methods=["POST"])
+def activity_merged_export():
+    """
+    POST /api/activity/merged-export
+    JSON body: {"activity_ids": [...], "format": "excel"|"csv"}
+    合并导出多个活动的参与人员明细。
+    """
+    data = request.get_json(silent=True) or {}
+    activity_ids = data.get("activity_ids", [])
+    fmt = data.get("format", "excel")
+
+    from db.database import get_merged_activity_participants
+    rows = get_merged_activity_participants(activity_ids)
+    if not rows:
+        return jsonify({"code": 0, "msg": "无数据可导出", "data": None})
+
+    import pandas as pd
+    import os
+    df = pd.DataFrame(rows)
+    col_map = {
+        "activity_name": "活动名称", "activity_time": "活动时间",
+        "student_id": "学号", "student_name": "姓名"
+    }
+    df.rename(columns=col_map, inplace=True)
+
+    export_dir = os.path.join(os.path.dirname(__file__), "..", "data", "exports")
+    os.makedirs(export_dir, exist_ok=True)
+
+    if fmt == "csv":
+        filepath = os.path.join(export_dir, "activity_merged.csv")
+        df.to_csv(filepath, index=False, encoding="utf-8-sig")
+        return send_file(filepath, as_attachment=True, mimetype="text/csv",
+                         download_name="activity_merged.csv")
+    else:
+        filepath = os.path.join(export_dir, "activity_merged.xlsx")
+        df.to_excel(filepath, index=False, engine="openpyxl")
+        return send_file(filepath, as_attachment=True,
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                         download_name="activity_merged.xlsx")
+
+
+@api.route("/activity/<int:activity_id>", methods=["DELETE"])
+def delete_activity(activity_id):
+    """DELETE /api/activity/<id>"""
+    from db.database import delete_activity as db_delete_activity
+    ok = db_delete_activity(activity_id)
+    if ok:
+        return jsonify({"code": 0, "msg": "删除成功", "data": None})
+    return jsonify({"code": 7, "msg": "活动不存在", "data": None}), 404
+
+
+@api.route("/activity/<int:activity_id>/participants", methods=["GET"])
+def activity_participants(activity_id):
+    """GET /api/activity/<id>/participants"""
+    from db.database import query_emotion
+    rows = db_query_activity(activity_id=activity_id)
+    participants = []
+    for r in rows:
+        if r.get("student_id"):
+            # 查该学生在本次活动时间附近的情绪
+            emotion_records = query_emotion(student_id=r["student_id"])
+            emotion = emotion_records[0]["emotion"] if emotion_records else "neutral"
+            participants.append({
+                "student_id": r["student_id"],
+                "name": r.get("student_name", ""),
+                "emotion": emotion,
+            })
+    return jsonify({
+        "code": 0,
+        "msg": "ok",
+        "data": {
+            "activity_id": activity_id,
+            "participants": participants,
+        }
+    })
 
 
 @api.route("/students", methods=["GET"])
@@ -142,13 +239,20 @@ def students():
 @api.route("/export", methods=["GET"])
 def export():
     """
-    GET /api/export?date=YYYY-MM-DD&student_id=xxx&format=excel|csv
+    GET /api/export?type=attendance|activity&date=xxx&student_id=xxx&format=excel|csv
     """
+    export_type = request.args.get("type", "attendance")
     date = request.args.get("date")
     student_id = request.args.get("student_id")
+    name = request.args.get("name")
     fmt = request.args.get("format", "excel")
 
-    filepath = export_attendance(date=date, student_id=student_id, fmt=fmt)
+    if export_type == "activity":
+        from service.query import export_activity
+        filepath = export_activity(date=date, name=name, fmt=fmt)
+    else:
+        filepath = export_attendance(date=date, student_id=student_id, fmt=fmt)
+
     if filepath is None:
         return jsonify({"code": 0, "msg": "无数据可导出", "data": None})
 

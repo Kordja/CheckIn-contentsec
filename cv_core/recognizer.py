@@ -66,30 +66,50 @@ def recognize_face(face_image: np.ndarray, threshold=MATCH_THRESHOLD):
     识别单张人脸，返回 student_id。
     如果未匹配到任何人脸库中的记录，返回 None。
     """
+    candidates = _search_candidates(face_image, top_k=3)
+    if candidates and candidates[0][1] <= threshold:
+        return candidates[0][0]
+    return None
+
+
+def recognize_face_topk(face_image: np.ndarray, top_k=3,
+                        threshold=MATCH_THRESHOLD):
+    """
+    识别单张人脸，返回前 k 个候选 [(student_id, distance), ...]，
+    仅包含距离在阈值内的候选。
+    """
+    candidates = _search_candidates(face_image, top_k=top_k)
+    return [(sid, d) for sid, d in candidates if d <= threshold]
+
+
+def _search_candidates(face_image: np.ndarray, top_k=3):
+    """
+    在编码库中搜索前 top_k 个最匹配的候选，
+    返回 [(student_id, distance), ...]（按距离升序，含超阈值候选）。
+    """
     global _encodings_db
     if face_image is None or face_image.size == 0:
-        return None
+        return []
 
     rgb = _to_rgb(face_image)
     encodings = face_recognition.face_encodings(rgb)
     if not encodings:
-        return None
+        return []
 
     query_enc = encodings[0]
 
-    best_id = None
-    best_dist = float("inf")
-
+    # 收集所有候选距离，取每个学生的最小距离
+    best_per_student = {}
     for student_id, stored_encs in _encodings_db.items():
-        for stored_enc in stored_encs:
-            dist = np.linalg.norm(query_enc - stored_enc)
-            if dist < best_dist:
-                best_dist = dist
-                best_id = student_id
+        min_dist = min(
+            np.linalg.norm(query_enc - stored_enc)
+            for stored_enc in stored_encs
+        )
+        best_per_student[student_id] = min_dist
 
-    if best_dist <= threshold:
-        return best_id
-    return None
+    # 按距离排序，取 top_k
+    sorted_candidates = sorted(best_per_student.items(), key=lambda x: x[1])
+    return sorted_candidates[:top_k]
 
 
 def get_all_students():

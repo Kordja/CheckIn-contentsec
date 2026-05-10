@@ -19,9 +19,10 @@ def _get_detector():
     return _detector
 
 
-def detect_faces(image: np.ndarray):
+def detect_faces(image: np.ndarray, upsample=1):
     """
     检测图片中的所有人脸，返回 bbox 列表 [(x, y, w, h), ...]。
+    upsample: 上采样次数（1=正常，2=更敏感，适合侧脸/暗光/遮挡）
     无人脸时返回空列表。
     """
     if image is None or image.size == 0:
@@ -29,7 +30,7 @@ def detect_faces(image: np.ndarray):
 
     detector = _get_detector()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    rects = detector(gray, 1)
+    rects = detector(gray, upsample)
 
     result = []
     for rect in rects:

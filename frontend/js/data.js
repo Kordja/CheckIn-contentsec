@@ -18,7 +18,7 @@ async function queryAll() {
     const [attResp, emoResp, stuResp] = await Promise.all([
         fetch(API_BASE + '/attendance?' + params, {cache: 'no-store'}),
         fetch(API_BASE + '/emotion?' + params, {cache: 'no-store'}),
-        fetch(API_BASE + '/students?' + params, {cache: 'no-store'}),
+        fetch(API_BASE + '/students?_t=' + Date.now(), {cache: 'no-store'}),
     ]);
 
     const attData = await attResp.json();
@@ -44,7 +44,7 @@ function updateStats(attData, emoData, stuData) {
 function renderAttendance(data) {
     const tbody = document.getElementById('attendanceBody');
     if (!data.data || !data.data.records || data.data.records.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">无记录</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">无记录</td></tr>';
         return;
     }
     const emoMap = {angry:'愤怒',disgust:'厌恶',fear:'恐惧',happy:'高兴',sad:'悲伤',surprise:'惊讶',neutral:'中性'};

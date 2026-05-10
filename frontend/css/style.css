@@ -241,7 +241,54 @@ tr:hover { background: #f8fafc; }
     background: rgba(79, 70, 229, 0.03);
 }
 .upload-zone .upload-icon { font-size: 36px; margin-bottom: 12px; }
-.upload-zone img { max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 16px; }
+.upload-zone.has-preview {
+    border-style: solid;
+    border-color: var(--primary);
+}
+.upload-zone.has-preview p,
+.upload-zone.has-preview .upload-icon {
+    display: none;
+}
+.upload-zone img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-height: 360px;
+    object-fit: contain;
+    border-radius: 8px;
+}
+.upload-zone img.portrait {
+    max-height: 360px;
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+}
+.preview-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 2;
+}
+.upload-zone:hover .preview-close {
+    opacity: 1;
+}
+.preview-close:hover {
+    background: rgba(0,0,0,0.75);
+}
 
 /* === Toast === */
 .toast {
@@ -313,6 +360,27 @@ tr:hover { background: #f8fafc; }
 .stat-card-clickable:hover {
     background: #f8fafc;
     border-color: var(--primary);
+}
+
+/* === 弹窗内表格固定表头 === */
+.modal-body table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+    box-shadow: 0 1px 0 var(--border);
+}
+
+/* === 合照历史分栏 === */
+.history-split {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    align-items: start;
+}
+@media (max-width: 860px) {
+    .history-split {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* === 文字颜色 === */

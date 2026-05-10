@@ -39,9 +39,12 @@ def get_emotion(date: str = None, student_id: str = None) -> dict:
     }
 
 
-def get_activity(activity_id: int = None) -> dict:
-    """查询活动及参与详情。"""
-    rows = query_activity(activity_id=activity_id)
+def get_activity(activity_id: int = None, date: str = None,
+                 name: str = None, date_start: str = None,
+                 date_end: str = None) -> dict:
+    """查询活动及参与详情，支持日期、时间段和名称模糊搜索。"""
+    rows = query_activity(activity_id=activity_id, date=date, name=name,
+                          date_start=date_start, date_end=date_end)
     stats = get_activity_stats()
     return {
         "code": 0,
@@ -51,6 +54,37 @@ def get_activity(activity_id: int = None) -> dict:
             "stats": stats,
         }
     }
+
+
+def export_activity(date: str = None, name: str = None,
+                    fmt: str = "excel") -> str:
+    """
+    导出活动记录为文件。
+    """
+    rows = query_activity(date=date, name=name)
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows)
+    col_map = {
+        "id": "活动ID", "name": "活动名称", "time": "时间",
+        "participant_count": "参与人数"
+    }
+    df.rename(columns=col_map, inplace=True)
+
+    export_dir = os.path.join(
+        os.path.dirname(__file__), "..", "data", "exports"
+    )
+    os.makedirs(export_dir, exist_ok=True)
+
+    if fmt == "csv":
+        filepath = os.path.join(export_dir, "activity_export.csv")
+        df.to_csv(filepath, index=False, encoding="utf-8-sig")
+    else:
+        filepath = os.path.join(export_dir, "activity_export.xlsx")
+        df.to_excel(filepath, index=False, engine="openpyxl")
+
+    return filepath
 
 
 def export_attendance(date: str = None, student_id: str = None,
