@@ -301,14 +301,17 @@ def register():
 
     existing = get_student(student_id)
     if existing:
-        from db.database import update_student_name
         if name and name != existing.get("name"):
-            update_student_name(student_id, name)
+            return jsonify({
+                "code": 6,
+                "msg": f"学号 {student_id} 已注册为「{existing['name']}」，与输入的「{name}」不匹配，请核实",
+                "data": None
+            }), 400
         save_encodings()
         return jsonify({
             "code": 0,
             "msg": f"补录成功（为 {existing['name']} 追加入脸编码）",
-            "data": {"student_id": student_id, "name": name or existing["name"]}
+            "data": {"student_id": student_id, "name": existing["name"]}
         })
 
     if name:

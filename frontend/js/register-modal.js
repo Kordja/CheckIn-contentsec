@@ -53,6 +53,27 @@ function captureRegFrame() {
     });
 }
 
+// ---- 预检学生是否已存在 ----
+
+async function checkExistingStudent(sid, name) {
+    try {
+        const resp = await fetch(API_BASE + '/students?_t=' + Date.now());
+        const data = await resp.json();
+        if (data.data && data.data.students) {
+            const found = data.data.students.find(s => s.student_id === sid);
+            if (found) {
+                if (found.name !== name) {
+                    return { ok: false, msg: `学号 ${sid} 已注册为「${found.name}」，与输入的「${name}」不匹配` };
+                }
+                return { ok: 'confirm', msg: `学号 ${sid}「${name}」已注册，是否为其补充人脸？` };
+            }
+        }
+        return { ok: true };
+    } catch (e) {
+        return { ok: true };  // 网络错误放行，让后端再校验一次
+    }
+}
+
 // ---- 拍照注册 ----
 
 async function registerFace() {
@@ -60,6 +81,15 @@ async function registerFace() {
     const sid = document.getElementById('regStudentId').value.trim();
 
     if (!name || !sid) { alert('请填写姓名和学号'); return; }
+
+    const check = await checkExistingStudent(sid, name);
+    if (!check.ok) {
+        document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">' + check.msg + '</span>';
+        return;
+    }
+    if (check.ok === 'confirm' && !confirm(check.msg + '\n\n点「确定」继续补录，点「取消」返回。')) {
+        return;
+    }
 
     const v = document.getElementById('regVideo');
     if (!v || !v.videoWidth) { alert('摄像头未就绪，请刷新页面后重试'); return; }
@@ -80,10 +110,10 @@ async function registerFace() {
         const result = await resp.json();
 
         if (result.code === 0) {
-            document.getElementById('regResult').innerHTML = '<span style="color:var(--success);">✅ 注册成功</span>';
+            document.getElementById('regResult').innerHTML = '<span style="color:var(--success);">' + result.msg + '</span>';
             setTimeout(closeRegisterModal, 1500);
         } else {
-            document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">❌ ' + result.msg + '</span>';
+            document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">' + result.msg + '</span>';
         }
     } catch (e) {
         document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">请求失败: ' + e.message + '</span>';
@@ -101,6 +131,15 @@ async function registerFromFile(file) {
     const sid = document.getElementById('regStudentId').value.trim();
     if (!name || !sid) { alert('请先填写姓名和学号'); return; }
 
+    const check = await checkExistingStudent(sid, name);
+    if (!check.ok) {
+        document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">' + check.msg + '</span>';
+        return;
+    }
+    if (check.ok === 'confirm' && !confirm(check.msg + '\n\n点「确定」继续补录，点「取消」返回。')) {
+        return;
+    }
+
     const btn = document.getElementById('btnRegister');
     btn.disabled = true;
     btn.textContent = '注册中...';
@@ -116,10 +155,10 @@ async function registerFromFile(file) {
         const result = await resp.json();
 
         if (result.code === 0) {
-            document.getElementById('regResult').innerHTML = '<span style="color:var(--success);">✅ 注册成功</span>';
+            document.getElementById('regResult').innerHTML = '<span style="color:var(--success);">' + result.msg + '</span>';
             setTimeout(closeRegisterModal, 1500);
         } else {
-            document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">❌ ' + result.msg + '</span>';
+            document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">' + result.msg + '</span>';
         }
     } catch (e) {
         document.getElementById('regResult').innerHTML = '<span style="color:var(--danger);">请求失败: ' + e.message + '</span>';
