@@ -127,8 +127,11 @@
             <h3>已注册学生</h3>
             <button class="modal-close" onclick="closeStudentListModal()">&times;</button>
         </div>
-        <div class="modal-body" id="studentListBody">
-            <p style="color:var(--text-muted);">加载中...</p>
+        <div class="modal-body">
+            <input id="studentSearch" type="text" placeholder="搜索学号或姓名..." style="width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:12px;" oninput="filterStudents()">
+            <div id="studentListBody">
+                <p style="color:var(--text-muted);">加载中...</p>
+            </div>
         </div>
     </div>
 </div>

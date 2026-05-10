@@ -158,9 +158,7 @@ function renderStudentPage() {
     const start = studentPage * PAGE_SIZE;
     const page = filtered.slice(start, start + PAGE_SIZE);
 
-    let html = '<div style="margin-bottom:12px;display:flex;gap:8px;">';
-    html += '<input id="studentSearch" type="text" placeholder="搜索学号或姓名..." value="' + escHtml(keyword) + '" style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;" oninput="filterStudents()">';
-    html += '</div>';
+    let html = '';
 
     if (page.length === 0) {
         html += '<p style="color:var(--text-muted);text-align:center;padding:16px;">' + (keyword ? '无匹配结果' : '暂无注册学生') + '</p>';
@@ -197,19 +195,6 @@ function renderStudentPage() {
     }
 
     document.getElementById('studentListBody').innerHTML = html;
-
-    // 恢复搜索框焦点和光标位置
-    if (keyword) {
-        const inp = document.getElementById('studentSearch');
-        if (inp) {
-            inp.focus();
-            inp.setSelectionRange(inp.value.length, inp.value.length);
-        }
-    }
-}
-
-function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function startEdit(sid) {
