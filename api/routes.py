@@ -5,6 +5,7 @@ Flask API 路由定义。
 
 from __future__ import annotations
 import os
+import traceback
 import cv2
 import numpy as np
 from flask import Blueprint, request, jsonify, send_file
@@ -93,7 +94,12 @@ def group():
 
     activity_name = request.form.get("activity_name", "").strip()
 
-    result = process_group(img, activity_name)
+    try:
+        result = process_group(img, activity_name)
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"code": -1, "msg": f"服务器内部错误: {e}", "data": None}), 500
+
     status_code = 200 if result["code"] == 0 else 400
     return jsonify(result), status_code
 

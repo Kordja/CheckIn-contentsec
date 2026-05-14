@@ -19,7 +19,7 @@ _DEFAULT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "encodings
 _encodings_db: dict[str, list[np.ndarray]] = {}
 
 # 识别阈值（欧氏距离，越小越严格）
-MATCH_THRESHOLD = 0.6
+MATCH_THRESHOLD = 0.58
 
 
 def load_encodings(path=None):
@@ -77,8 +77,13 @@ def recognize_face_topk(face_image: np.ndarray, top_k=3,
     """
     识别单张人脸，返回前 k 个候选 [(student_id, distance), ...]，
     仅包含距离在阈值内的候选。
+
+    注意：本函数不设 margin 检查，所有阈值内候选均返回。
+    合照去重由 service/group.py 的 _deduplicate_assignments 贪心算法负责。
     """
     candidates = _search_candidates(face_image, top_k=top_k)
+    if not candidates or candidates[0][1] > threshold:
+        return []
     return [(sid, d) for sid, d in candidates if d <= threshold]
 
 

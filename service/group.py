@@ -2,14 +2,25 @@
 合照服务：批量人脸检测 → 逐个识别 → 情绪分析 → 统计名单 → 写入活动记录
 """
 
+import cv2
 from datetime import datetime
 from db.database import add_activity_record, create_activity, get_student, save_emotion
 from cv_core.face_detection import detect_faces
-from cv_core.recognizer import recognize_face_topk
+from cv_core.recognizer import recognize_face_topk, MATCH_THRESHOLD
 from cv_core.emotion import analyze_emotion
 
+MAX_WIDTH = 1200
 
-def _deduplicate_assignments(candidates_list, threshold=0.6):
+
+def _resize(img):
+    h, w = img.shape[:2]
+    if w > MAX_WIDTH:
+        scale = MAX_WIDTH / w
+        return cv2.resize(img, (MAX_WIDTH, int(h * scale)))
+    return img
+
+
+def _deduplicate_assignments(candidates_list, threshold=MATCH_THRESHOLD):
     """
     贪心去重 + 二次分配。
 
@@ -71,19 +82,35 @@ def process_group(image, activity_name="") -> dict:
     if image is None or image.size == 0:
         return {"code": 1, "msg": "无效图片", "data": None}
 
-    faces = detect_faces(image)
+    # 检测用缩放图，但裁剪从原图取（保持人脸分辨率）
+    original = image
+    detection_img = _resize(image)
+    scale_x = original.shape[1] / detection_img.shape[1]
+    scale_y = original.shape[0] / detection_img.shape[0]
+
+    faces = detect_faces(detection_img)
     if not faces:
         return {"code": 2, "msg": "未检测到人脸", "data": []}
 
     activity_id = create_activity(activity_name)
 
-    # 提取每张人脸的候选列表和情绪
+    # 提取每张人脸的候选列表和情绪（从原图裁剪）
     face_imgs = []
     emotions = []
     candidates_list = []
     for bbox in faces:
         x, y, w, h = bbox
-        face_img = image[y:y + h, x:x + w]
+        # bbox 坐标从检测图映射回原图
+        ox, oy = int(x * scale_x), int(y * scale_y)
+        ow, oh = int(w * scale_x), int(h * scale_y)
+        ox, oy = max(0, ox), max(0, oy)
+        ow, oh = min(original.shape[1] - ox, ow), min(original.shape[0] - oy, oh)
+        face_img = original[oy:oy + oh, ox:ox + ow]
+        # 群照中的人脸可能太小，放大到至少 300px 保证 face_recognition 编码质量
+        if face_img.shape[1] < 300:
+            scale_f = 300 / face_img.shape[1]
+            face_img = cv2.resize(face_img, (300, int(face_img.shape[0] * scale_f)),
+                                  interpolation=cv2.INTER_LANCZOS4)
         face_imgs.append(face_img)
 
         # 情绪（与人脸一一对应，不受识别结果影响）
@@ -105,6 +132,9 @@ def process_group(image, activity_name="") -> dict:
     for i, bbox in enumerate(faces):
         student_id = assigned_ids[i]
         x, y, w, h = bbox
+        # 输出原图坐标
+        ox, oy = int(x * scale_x), int(y * scale_y)
+        ow, oh = int(w * scale_x), int(h * scale_y)
 
         name = None
         if student_id:
@@ -117,7 +147,7 @@ def process_group(image, activity_name="") -> dict:
         results.append({
             "student_id": student_id,
             "name": name,
-            "bbox": list(bbox),
+            "bbox": [ox, oy, ow, oh],
             "emotion": emotions[i],
         })
 

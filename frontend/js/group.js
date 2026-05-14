@@ -6,6 +6,7 @@ let historyData = [];
 let historyPage = 0;
 let freqChart = null;
 const PAGE_SIZE = 10;
+const selectedIds = new Set();  // 跨页持久化选中状态
 
 // ---- 默认活动名 ----
 
@@ -206,6 +207,7 @@ async function queryHistory() {
             historyData = [];
         }
         historyPage = 0;
+        selectedIds.clear();
         document.getElementById('selectAll').checked = false;
         renderHistoryPage();
         updateFreqStats();
@@ -226,9 +228,10 @@ function renderHistoryPage() {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);">无记录</td></tr>';
     } else {
         tbody.innerHTML = page.map((a, i) => {
+            const checked = selectedIds.has(a.id) ? 'checked' : '';
             const safeName = a.name.replace(/'/g, "\\'");
             return `<tr>
-                <td><input type="checkbox" class="activity-check" data-id="${a.id}" onchange="updateFreqStats()"></td>
+                <td><input type="checkbox" class="activity-check" data-id="${a.id}" ${checked} onchange="onCheckToggle(${a.id}, this.checked)"></td>
                 <td>${a.name}</td>
                 <td style="font-size:12px;">${(a.time || '').slice(0,10)}</td>
                 <td>${a.participant_count || 0}</td>
@@ -255,10 +258,30 @@ function renderHistoryPage() {
     } else {
         document.getElementById('historyPager').innerHTML = '';
     }
+
+    // 同步表头全选复选框状态
+    const pageIds = historyData.slice(historyPage * PAGE_SIZE, historyPage * PAGE_SIZE + PAGE_SIZE).map(a => a.id);
+    document.getElementById('selectAll').checked = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id));
+}
+
+function onCheckToggle(id, checked) {
+    if (checked) {
+        selectedIds.add(id);
+    } else {
+        selectedIds.delete(id);
+    }
+    updateFreqStats();
 }
 
 function toggleSelectAll() {
     const checked = document.getElementById('selectAll').checked;
+    const start = historyPage * PAGE_SIZE;
+    const page = historyData.slice(start, start + PAGE_SIZE);
+    if (checked) {
+        page.forEach(a => selectedIds.add(a.id));
+    } else {
+        page.forEach(a => selectedIds.delete(a.id));
+    }
     document.querySelectorAll('.activity-check').forEach(cb => cb.checked = checked);
     updateFreqStats();
 }
@@ -266,8 +289,7 @@ function toggleSelectAll() {
 // ---- 频次统计 ----
 
 async function updateFreqStats() {
-    const checked = document.querySelectorAll('.activity-check:checked');
-    const ids = Array.from(checked).map(cb => parseInt(cb.dataset.id));
+    const ids = Array.from(selectedIds);
 
     if (ids.length === 0) {
         // 没有勾选 = 统计全部
@@ -340,8 +362,7 @@ async function exportMerged() { exportMergedDo('excel'); }
 async function exportMergedCSV() { exportMergedDo('csv'); }
 
 async function exportMergedDo(fmt) {
-    const checked = document.querySelectorAll('.activity-check:checked');
-    const ids = Array.from(checked).map(cb => parseInt(cb.dataset.id));
+    const ids = Array.from(selectedIds);
 
     try {
         const resp = await fetch(API_BASE + '/activity/merged-export', {
